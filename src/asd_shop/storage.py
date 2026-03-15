@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from asd_shop.models import RunConfig, RunRecord
+from asd_shop.models import RunConfig, RunRecord, RunStatus
 
 
 def _create_run_id() -> str:
@@ -37,3 +37,17 @@ def initialize_run(config: RunConfig) -> RunRecord:
 def save_run_record(record: RunRecord) -> None:
     record.updated_at = datetime.now(timezone.utc)
     _write_run_record(record)
+
+
+def load_run_record(runs_dir: Path, run_id: str) -> RunRecord:
+    run_dir = runs_dir / run_id
+    payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    payload["workspace"] = Path(payload["workspace"])
+    payload["run_dir"] = Path(payload["run_dir"])
+    return RunRecord.model_validate(payload)
+
+
+def update_run_status(record: RunRecord, status: RunStatus) -> RunRecord:
+    record.status = status
+    save_run_record(record)
+    return record
