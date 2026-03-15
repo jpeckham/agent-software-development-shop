@@ -22,6 +22,10 @@ GENERIC_STARTUP_MARKERS = (
     "operating in `qa` role",
     "what needs qa",
     "i'll apply the relevant skills before touching code",
+    "i will not use a worktree",
+    "i'll stay in this workspace",
+    "i'll work directly in this local repository",
+    "leave that branch checked out",
 )
 
 

@@ -6,3 +6,5 @@ def test_claude_backend_builds_print_command(tmp_path) -> None:
     command = backend.build_command(prompt="analyze repo", workspace=tmp_path)
     assert command[0] == "claude"
     assert "-p" in command
+    assert "--output-format" in command
+    assert "stream-json" in command

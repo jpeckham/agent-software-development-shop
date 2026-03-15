@@ -27,6 +27,10 @@ def test_product_manager_prompt_prefers_user_visible_features(tmp_path) -> None:
 
 
 def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
+    plans_dir = tmp_path / "docs" / "plans"
+    plans_dir.mkdir(parents=True)
+    plan_path = plans_dir / "2026-03-15-home-decomposition-implementation.md"
+    plan_path.write_text("# plan", encoding="utf-8")
     prompt = build_prompt(
         role="developer",
         workspace=tmp_path,
@@ -36,3 +40,5 @@ def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
     assert prompt.startswith("Implement the feature now")
     assert "Role: developer" not in prompt
     assert "Do not create or ask for a worktree" in prompt
+    assert str(plan_path) in prompt
+    assert "Execute Task 1 immediately" in prompt

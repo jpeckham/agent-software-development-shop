@@ -25,6 +25,14 @@ ROLE_EXECUTION_GUIDANCE = {
 }
 
 
+def _find_latest_workspace_implementation_plan(workspace: Path) -> Path | None:
+    plans_dir = workspace / "docs" / "plans"
+    if not plans_dir.exists():
+        return None
+    candidates = sorted(plans_dir.glob("*implementation*.md"), key=lambda path: path.stat().st_mtime, reverse=True)
+    return candidates[0] if candidates else None
+
+
 def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, str]) -> str:
     definition = ROLE_BY_NAME[role]
     sections = [
@@ -39,6 +47,11 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
     ]
     if role == "developer":
         sections.append("Apply code changes in the repository when needed and produce the required artifact.")
+        plan_path = _find_latest_workspace_implementation_plan(workspace)
+        if plan_path is not None:
+            sections.append(f"Execution source of truth: {plan_path}")
+            sections.append("Execute Task 1 immediately from that implementation plan.")
+            sections.append("Do not re-evaluate whether planning, approval, or worktree setup is needed.")
     elif role == "qa":
         sections.append("Run the relevant verification and produce the required QA artifact immediately.")
 

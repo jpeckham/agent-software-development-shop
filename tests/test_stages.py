@@ -94,6 +94,34 @@ def test_execute_stage_rejects_generic_startup_text(tmp_path, monkeypatch) -> No
         raise AssertionError("expected generic startup text to fail stage validation")
 
 
+def test_execute_stage_rejects_policy_acknowledgement_text(tmp_path, monkeypatch) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+
+    class PolicyBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            from asd_shop.shell_runner import CommandResult
+
+            return CommandResult(
+                args=["codex", "exec"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout="I will not use a worktree. I'll work in this repository and leave the branch checked out.",
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr("asd_shop.stages.get_backend", lambda _: PolicyBackend())
+
+    from asd_shop.stages import StageExecutionError
+
+    try:
+        execute_stage("developer", record, prior_artifacts={})
+    except StageExecutionError:
+        pass
+    else:
+        raise AssertionError("expected policy acknowledgement text to fail stage validation")
+
+
 def test_execute_stage_generates_human_approval_locally(tmp_path, monkeypatch) -> None:
     record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
 
