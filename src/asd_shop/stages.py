@@ -48,6 +48,18 @@ def execute_stage(
         _render_payload(payload.get("title", definition.name), payload),
     )
 
+    if role == "developer":
+        implementation_payload = {
+            "title": "CLI MVP implementation plan",
+            "implementation_plan": payload.get("implementation_plan", []),
+            "test_plan": payload.get("test_plan", []),
+        }
+        write_markdown_artifact(
+            record.run_dir,
+            "ImplementationPlan.md",
+            _render_payload("CLI MVP implementation plan", implementation_payload),
+        )
+
     append_event(
         record.run_dir,
         TelemetryEvent(

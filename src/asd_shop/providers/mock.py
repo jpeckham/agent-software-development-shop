@@ -35,6 +35,11 @@ MOCK_RESPONSES = {
         "title": "CLI MVP technical design",
         "changes": ["Add CLI", "Add workflow runner", "Add telemetry"],
         "test_plan": ["Run pytest", "Run CLI command"],
+        "implementation_plan": [
+            "Initialize the run directory",
+            "Execute each stage in sequence",
+            "Write markdown artifacts and JSONL telemetry",
+        ],
     },
     "qa": {
         "title": "QA report",
