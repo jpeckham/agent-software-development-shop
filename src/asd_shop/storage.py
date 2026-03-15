@@ -51,3 +51,22 @@ def update_run_status(record: RunRecord, status: RunStatus) -> RunRecord:
     record.status = status
     save_run_record(record)
     return record
+
+
+def find_most_recent_resumable_run(runs_dir: Path) -> RunRecord | None:
+    if not runs_dir.exists():
+        return None
+
+    candidates: list[RunRecord] = []
+    for run_json in runs_dir.glob("*/run.json"):
+        payload = json.loads(run_json.read_text(encoding="utf-8"))
+        if payload.get("status") not in {"failed", "running", "pending"}:
+            continue
+        payload["workspace"] = Path(payload["workspace"])
+        payload["run_dir"] = Path(payload["run_dir"])
+        candidates.append(RunRecord.model_validate(payload))
+
+    if not candidates:
+        return None
+
+    return sorted(candidates, key=lambda record: record.updated_at)[-1]

@@ -15,3 +15,12 @@ def test_developer_prompt_forbids_asking_for_task_again(tmp_path) -> None:
         prior_artifacts={"FeatureSpec.md": "# spec"},
     )
     assert "Do not ask for the task again" in prompt
+
+
+def test_product_manager_prompt_prefers_user_visible_features(tmp_path) -> None:
+    prompt = build_prompt(
+        role="product_manager",
+        workspace=tmp_path,
+        prior_artifacts={"ProjectSnapshot.md": "# snapshot"},
+    )
+    assert "Prefer player-visible or user-visible functionality" in prompt

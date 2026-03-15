@@ -19,14 +19,18 @@ def main() -> None:
 
 
 @app.command()
-def run(workspace: Path = Path(".")) -> None:
+def run(
+    workspace: Path = Path("."),
+    new_run: bool = typer.Option(False, "--new-run"),
+) -> None:
     resolved_workspace = workspace.resolve()
     settings = Settings()
     record = run_cycle(
         RunConfig(
             workspace=resolved_workspace,
             runs_dir=(resolved_workspace / settings.runs_dir).resolve(),
-        )
+        ),
+        new_run=new_run,
     )
     typer.echo(f"run_id={record.run_id}")
     typer.echo(f"status={record.status.value}")

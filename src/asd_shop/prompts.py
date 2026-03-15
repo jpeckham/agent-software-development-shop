@@ -6,6 +6,10 @@ from asd_shop.roles import ROLE_BY_NAME
 
 
 ROLE_EXECUTION_GUIDANCE = {
+    "product_manager": [
+        "Prefer player-visible or user-visible functionality over pure internal refactors.",
+        "Only choose architecture or cleanup work when it directly unlocks or de-risks a near-term user-facing feature.",
+    ],
     "developer": [
         "The prior artifacts already define the task.",
         "Do the work now.",
