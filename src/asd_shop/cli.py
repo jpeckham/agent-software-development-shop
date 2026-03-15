@@ -64,3 +64,7 @@ def approve(
     )
     typer.echo(f"run_id={record.run_id}")
     typer.echo(f"status={status.value}")
+
+
+if __name__ == "__main__":
+    app()

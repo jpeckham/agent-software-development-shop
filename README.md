@@ -12,3 +12,35 @@ python -m venv .venv
 python -m pip install -e .[dev]
 python -m pytest -v
 ```
+
+## Commands
+
+Run one autonomous cycle in the current directory:
+
+```powershell
+python -m asd_shop.cli run
+```
+
+Approve the latest run after review:
+
+```powershell
+python -m asd_shop.cli approve <run-id> --decision approve
+```
+
+Reject a run:
+
+```powershell
+python -m asd_shop.cli approve <run-id> --decision reject
+```
+
+## Provider Configuration
+
+The default provider is the deterministic mock provider used by the tests. To point the CLI at an OpenAI-compatible endpoint, set:
+
+```powershell
+$env:ASD_SHOP_PROVIDER = "openai"
+$env:ASD_SHOP_MODEL = "gpt-4.1"
+$env:ASD_SHOP_OPENAI_API_KEY = "<token>"
+```
+
+Runs are written to `runs/<run-id>/` by default and include markdown artifacts, `run.json`, and `events.jsonl`.
