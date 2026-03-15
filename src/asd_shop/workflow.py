@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from asd_shop.artifacts import append_event
 from asd_shop.models import RunConfig, RunStatus, StageName, TelemetryEvent
-from asd_shop.providers.base import Provider
 from asd_shop.roles import ROLE_DEFINITIONS
 from asd_shop.stages import execute_stage
 from asd_shop.storage import initialize_run, save_run_record
 
 
-def run_cycle(config: RunConfig, provider: Provider):
+def run_cycle(config: RunConfig):
     record = initialize_run(config)
     record.status = RunStatus.RUNNING
     save_run_record(record)
@@ -20,7 +19,6 @@ def run_cycle(config: RunConfig, provider: Provider):
             result = execute_stage(
                 role=definition.name,
                 record=record,
-                provider=provider,
                 prior_artifacts=prior_artifacts,
             )
         except Exception as error:

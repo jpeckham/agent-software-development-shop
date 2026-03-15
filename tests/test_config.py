@@ -1,6 +1,6 @@
 from asd_shop.config import Settings
 
 
-def test_settings_uses_mock_provider_by_default() -> None:
+def test_settings_no_longer_require_provider_selection() -> None:
     settings = Settings()
-    assert settings.provider == "mock"
+    assert hasattr(settings, "runs_dir")

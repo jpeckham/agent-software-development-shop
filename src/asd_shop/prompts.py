@@ -10,7 +10,9 @@ def build_prompt(role: str, workspace: Path, prior_artifacts: dict[str, str]) ->
     sections = [
         f"Role: {definition.name}",
         f"Workspace: {workspace}",
+        f"Required artifact file: {definition.artifact_filename}",
         f"Instruction: {definition.instruction}",
+        "Write the required artifact file in the workspace or produce complete artifact content on stdout.",
     ]
 
     if prior_artifacts:
