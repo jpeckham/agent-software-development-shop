@@ -13,14 +13,14 @@ This design updates the existing CLI MVP so the workflow supervisor shells out t
 
 ## Execution Model
 
-The application remains a Python CLI supervisor. Each workflow stage is mapped to one backend:
+The application remains a Python CLI supervisor. Each workflow stage is mapped to a backend chain:
 
 - `codex`
 - `claude`
 
 Each stage definition includes:
 
-- backend name,
+- backend priority list,
 - command template,
 - prompt text,
 - output expectations,
@@ -45,11 +45,22 @@ The first implementation should use a simple default mapping:
 - `product_manager` -> `claude`
 - `business_analyst` -> `claude`
 - `architect` -> `claude`
-- `developer` -> `codex`
-- `qa` -> `codex`
+- `developer` -> `codex`, fallback `claude`
+- `qa` -> `codex`, fallback `claude`
 - `human_approval` -> supervisor-generated packet
 
 This split reflects the likely strength of Claude for document-heavy reasoning and Codex for repository mutation and verification. The mapping should be configurable later.
+
+## Fallback Policy
+
+Any stage whose primary backend is `codex` should automatically fall back to `claude` only when Codex is unavailable for platform reasons such as:
+
+- credits or quota exhausted,
+- authentication failure,
+- service unavailable,
+- transient backend unavailability.
+
+The supervisor must distinguish backend-availability failures from normal task failures. If Codex runs but the task itself fails, the stage remains failed and must not silently switch to Claude.
 
 ## Prompt And Output Contract
 
@@ -96,7 +107,7 @@ Existing outputs remain:
 
 ## Failure Handling
 
-If a backend exits non-zero, times out, or fails to produce the expected artifact, the supervisor:
+If all eligible backends for a stage fail, or if a stage fails without meeting fallback conditions, the supervisor:
 
 1. records the command result,
 2. writes a failure event,
@@ -114,6 +125,7 @@ New or updated components:
 - `agent_backends/codex_cli.py`
 - `agent_backends/claude_cli.py`
 - `shell_runner.py`
+- fallback classification for Codex availability failures
 - updated stage definitions with backend assignment
 - updated workflow execution logic
 - git-inspection helpers for changed files and patch capture
@@ -129,6 +141,8 @@ Key coverage:
 - `codex exec` command generation,
 - `claude -p` command generation,
 - stage-to-backend routing,
+- Codex-to-Claude fallback on availability failures,
+- no fallback on ordinary task failures,
 - failure handling on non-zero exits,
 - audit artifact creation,
 - diff capture after stage execution,

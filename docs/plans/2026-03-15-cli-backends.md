@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace the current provider-based execution model with direct orchestration of the installed `codex` and `claude` CLIs, allowing autonomous stage execution and repo mutation with full audit logging.
+**Goal:** Replace the current provider-based execution model with direct orchestration of the installed `codex` and `claude` CLIs, allowing autonomous stage execution and repo mutation with full audit logging, with automatic fallback from Codex to Claude when Codex is unavailable.
 
-**Architecture:** Introduce backend adapters around `codex exec` and `claude -p`, a shell-runner abstraction for deterministic testing, stage metadata that maps roles to CLIs, and audit capture that records command results plus git diffs after each stage. Preserve the existing workflow structure while swapping the execution engine.
+**Architecture:** Introduce backend adapters around `codex exec` and `claude -p`, a shell-runner abstraction for deterministic testing, stage metadata that maps roles to backend chains, fallback classification for Codex availability failures, and audit capture that records command results plus git diffs after each stage. Preserve the existing workflow structure while swapping the execution engine.
 
 **Tech Stack:** Python 3.10+, Typer, Pydantic v2, pytest, subprocess, git CLI, existing `asd_shop` package.
 
@@ -143,7 +143,7 @@ git add src/asd_shop/agent_backends/claude_cli.py tests/test_claude_backend.py
 git commit -m "feat: add claude cli backend"
 ```
 
-### Task 4: Replace role metadata with backend routing
+### Task 4: Replace role metadata with backend routing and fallback chains
 
 **Files:**
 - Modify: `src/asd_shop/roles.py`
@@ -156,21 +156,21 @@ from asd_shop.roles import ROLE_BY_NAME
 
 
 def test_developer_stage_routes_to_codex() -> None:
-    assert ROLE_BY_NAME["developer"].backend == "codex"
+    assert ROLE_BY_NAME["developer"].backends == ["codex", "claude"]
 
 
 def test_repository_analyst_routes_to_claude() -> None:
-    assert ROLE_BY_NAME["repository_analyst"].backend == "claude"
+    assert ROLE_BY_NAME["repository_analyst"].backends == ["claude"]
 ```
 
 **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/test_roles.py -v`
-Expected: FAIL because backend routing is not defined
+Expected: FAIL because backend routing and fallback chains are not defined
 
 **Step 3: Write minimal implementation**
 
-- Extend role definitions with `backend`.
+- Extend role definitions with ordered `backends`.
 - Route roles according to the approved design.
 - Keep artifact filenames intact.
 
@@ -186,7 +186,67 @@ git add src/asd_shop/roles.py tests/test_roles.py
 git commit -m "feat: add backend routing to roles"
 ```
 
-### Task 5: Add backend registry and selection helpers
+### Task 5: Add fallback classification for Codex availability failures
+
+**Files:**
+- Create: `src/asd_shop/backend_fallback.py`
+- Create: `tests/test_backend_fallback.py`
+
+**Step 1: Write the failing test**
+
+```python
+from asd_shop.backend_fallback import should_fallback_to_claude
+from asd_shop.shell_runner import CommandResult
+
+
+def test_should_fallback_on_codex_credit_failure() -> None:
+    result = CommandResult(
+        args=["codex", "exec"],
+        cwd="C:/repo",
+        exit_code=1,
+        stdout="",
+        stderr="out of credits",
+        duration_seconds=0.2,
+    )
+    assert should_fallback_to_claude("codex", result) is True
+
+
+def test_should_not_fallback_on_normal_task_failure() -> None:
+    result = CommandResult(
+        args=["codex", "exec"],
+        cwd="C:/repo",
+        exit_code=1,
+        stdout="",
+        stderr="pytest failed",
+        duration_seconds=0.2,
+    )
+    assert should_fallback_to_claude("codex", result) is False
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_backend_fallback.py -v`
+Expected: FAIL because fallback classification does not exist
+
+**Step 3: Write minimal implementation**
+
+- Add helper logic that classifies Codex availability failures.
+- Match obvious quota/auth/unavailable conditions.
+- Do not classify normal task failures as fallback-eligible.
+
+**Step 4: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_backend_fallback.py -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add src/asd_shop/backend_fallback.py tests/test_backend_fallback.py
+git commit -m "feat: add codex fallback classification"
+```
+
+### Task 6: Add backend registry and selection helpers
 
 **Files:**
 - Create: `src/asd_shop/backend_registry.py`
@@ -225,7 +285,7 @@ git add src/asd_shop/backend_registry.py tests/test_backend_registry.py
 git commit -m "feat: add backend registry"
 ```
 
-### Task 6: Add git inspection helpers for changed files and patch capture
+### Task 7: Add git inspection helpers for changed files and patch capture
 
 **Files:**
 - Create: `src/asd_shop/git_audit.py`
@@ -264,7 +324,7 @@ git add src/asd_shop/git_audit.py tests/test_git_audit.py
 git commit -m "feat: add git audit helpers"
 ```
 
-### Task 7: Add command log persistence
+### Task 8: Add command log persistence
 
 **Files:**
 - Modify: `src/asd_shop/artifacts.py`
@@ -315,7 +375,7 @@ git add src/asd_shop/artifacts.py tests/test_command_log.py
 git commit -m "feat: add command log persistence"
 ```
 
-### Task 8: Update prompts for CLI backend execution
+### Task 9: Update prompts for CLI backend execution
 
 **Files:**
 - Modify: `src/asd_shop/prompts.py`
@@ -356,7 +416,7 @@ git add src/asd_shop/prompts.py tests/test_backend_prompts.py
 git commit -m "feat: update prompts for cli backends"
 ```
 
-### Task 9: Replace stage execution to use CLI backends
+### Task 10: Replace stage execution to use CLI backends with fallback handling
 
 **Files:**
 - Modify: `src/asd_shop/stages.py`
@@ -389,6 +449,45 @@ def test_execute_stage_uses_backend_and_writes_command_log(tmp_path, monkeypatch
     result = execute_stage("repository_analyst", record, prior_artifacts={})
     assert result.status == "completed"
     assert (record.run_dir / "command-log.json").exists()
+
+
+def test_execute_stage_falls_back_from_codex_to_claude(tmp_path, monkeypatch) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+    calls = []
+
+    class CodexFailBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            calls.append("codex")
+            from asd_shop.shell_runner import CommandResult
+            return CommandResult(
+                args=["codex", "exec"],
+                cwd=str(workspace),
+                exit_code=1,
+                stdout="",
+                stderr="out of credits",
+                duration_seconds=0.1,
+            )
+
+    class ClaudeBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            calls.append("claude")
+            from asd_shop.shell_runner import CommandResult
+            return CommandResult(
+                args=["claude", "-p"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout="# artifact",
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr(
+        "asd_shop.stages.get_backend",
+        lambda name: CodexFailBackend() if name == "codex" else ClaudeBackend(),
+    )
+    result = execute_stage("developer", record, prior_artifacts={})
+    assert result.status == "completed"
+    assert calls == ["codex", "claude"]
 ```
 
 **Step 2: Run test to verify it fails**
@@ -399,8 +498,9 @@ Expected: FAIL because stage execution still depends on provider objects
 **Step 3: Write minimal implementation**
 
 - Remove the direct provider dependency from stage execution.
-- Select the backend from the role definition.
-- Run the backend command, write the artifact, command log, and diff patch.
+- Select the backend chain from the role definition.
+- Fall back from Codex to Claude only for classified availability failures.
+- Run the successful backend command, write the artifact, command log, and diff patch.
 
 **Step 4: Run test to verify it passes**
 
@@ -414,7 +514,7 @@ git add src/asd_shop/stages.py tests/test_stage_backends.py
 git commit -m "feat: switch stage execution to cli backends"
 ```
 
-### Task 10: Update workflow execution for backend-driven stages
+### Task 11: Update workflow execution for backend-driven stages
 
 **Files:**
 - Modify: `src/asd_shop/workflow.py`
@@ -461,7 +561,7 @@ git add src/asd_shop/workflow.py tests/test_workflow.py tests/test_failures.py
 git commit -m "feat: update workflow for cli backend execution"
 ```
 
-### Task 11: Remove obsolete provider wiring from CLI and config
+### Task 12: Remove obsolete provider wiring from CLI and config
 
 **Files:**
 - Modify: `src/asd_shop/cli.py`
@@ -505,7 +605,7 @@ git rm -r src/asd_shop/providers
 git commit -m "refactor: remove provider-based execution path"
 ```
 
-### Task 12: Add backend-aware end-to-end tests with mocked shell execution
+### Task 13: Add backend-aware end-to-end tests with mocked shell execution
 
 **Files:**
 - Modify: `tests/test_e2e_cycle.py`
@@ -549,7 +649,7 @@ git add tests/test_e2e_cycle.py tests/conftest.py
 git commit -m "test: add end-to-end coverage for cli backends"
 ```
 
-### Task 13: Add manual validation docs for real Codex and Claude CLIs
+### Task 14: Add manual validation docs for real Codex and Claude CLIs
 
 **Files:**
 - Modify: `README.md`
@@ -570,6 +670,7 @@ Expected: CLI help renders without error
 
 - Document the installed CLI prerequisites.
 - Document how stages route to Codex and Claude.
+- Document Codex-to-Claude fallback behavior for credit or availability failures.
 - Document that stages may mutate the repo directly.
 - Document a disposable test-repo validation flow.
 
