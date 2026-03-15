@@ -14,7 +14,7 @@ def test_run_cycle_creates_all_mvp_artifacts(tmp_path, monkeypatch) -> None:
                     args=["fake"],
                     cwd=str(workspace),
                     exit_code=0,
-                    stdout=f"# {stage_name}",
+                    stdout=f"`{__import__('asd_shop.roles').roles.ROLE_BY_NAME[stage_name].artifact_filename}` has been written.",
                     stderr="",
                     duration_seconds=0.1,
                 )

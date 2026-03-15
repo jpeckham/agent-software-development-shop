@@ -16,8 +16,32 @@ class StageExecutionError(RuntimeError):
     pass
 
 
+GENERIC_STARTUP_MARKERS = (
+    "send the task you want",
+    "developer role is active",
+    "operating in `qa` role",
+    "what needs qa",
+    "i'll apply the relevant skills before touching code",
+)
+
+
 def _stage_name(role: str) -> StageName:
     return StageName(role)
+
+
+def _is_generic_startup_text(content: str) -> bool:
+    lowered = content.lower()
+    return any(marker in lowered for marker in GENERIC_STARTUP_MARKERS)
+
+
+def _has_valid_stage_output(record: RunRecord, role: str, content: str) -> bool:
+    definition = ROLE_BY_NAME[role]
+    workspace_artifact = record.workspace / definition.artifact_filename
+    if workspace_artifact.exists():
+        return True
+    if definition.artifact_filename in content and not _is_generic_startup_text(content):
+        return True
+    return False
 
 
 def _write_stage_artifact(record: RunRecord, role: str, content: str) -> Path:
@@ -27,6 +51,29 @@ def _write_stage_artifact(record: RunRecord, role: str, content: str) -> Path:
     if role == "developer":
         write_markdown_artifact(record.run_dir, "ImplementationPlan.md", artifact_text)
     return artifact_path
+
+
+def _build_human_approval_packet(prior_artifacts: dict[str, str]) -> str:
+    sections = [
+        "# Approval Packet",
+        "",
+        "This packet was generated locally by the supervisor for human review.",
+        "",
+        "## Included Artifacts",
+    ]
+    for name in sorted(prior_artifacts):
+        sections.append(f"- {name}")
+    sections.extend(
+        [
+            "",
+            "## Decision",
+            "- Approve",
+            "- Approve with changes",
+            "- Defer",
+            "- Reject",
+        ]
+    )
+    return "\n".join(sections)
 
 
 def execute_stage(
@@ -44,6 +91,23 @@ def execute_stage(
         TelemetryEvent(actor=role, event_type="stage_started", metadata={"stage": role}),
     )
 
+    if role == "human_approval":
+        artifact_path = _write_stage_artifact(record, role, _build_human_approval_packet(prior_artifacts))
+        append_event(
+            record.run_dir,
+            TelemetryEvent(
+                actor=role,
+                event_type="stage_completed",
+                metadata={"stage": role, "artifact": artifact_path.name, "backend": "supervisor"},
+            ),
+        )
+        return StageResult(
+            stage=stage,
+            status="completed",
+            artifact_path=artifact_path,
+            summary="completed via supervisor",
+        )
+
     prompt = build_prompt(role=role, workspace=record.workspace, prior_artifacts=prior_artifacts)
 
     last_result = None
@@ -57,7 +121,7 @@ def execute_stage(
         last_result = result
         used_backend = backend_name
 
-        if result.exit_code == 0:
+        if result.exit_code == 0 and _has_valid_stage_output(record, role, result.stdout):
             artifact_path = _write_stage_artifact(record, role, result.stdout)
             append_event(
                 record.run_dir,
@@ -73,6 +137,9 @@ def execute_stage(
                 artifact_path=artifact_path,
                 summary=f"completed via {backend_name}",
             )
+
+        if result.exit_code == 0:
+            break
 
         if not should_fallback_to_claude(backend_name, result):
             break
