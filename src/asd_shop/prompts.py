@@ -32,6 +32,8 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
         f"Work in this repository: {workspace}",
         f"Required output artifact: {definition.artifact_filename}",
         "Do not ask what the task is.",
+        "Do not create or ask for a worktree.",
+        "Operate in the current workspace only.",
         "Do not stop at planning or role confirmation.",
         "Make the smallest reasonable assumptions and proceed.",
     ]

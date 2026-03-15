@@ -35,3 +35,4 @@ def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
     )
     assert prompt.startswith("Implement the feature now")
     assert "Role: developer" not in prompt
+    assert "Do not create or ask for a worktree" in prompt
