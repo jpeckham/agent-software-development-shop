@@ -24,3 +24,14 @@ def test_product_manager_prompt_prefers_user_visible_features(tmp_path) -> None:
         prior_artifacts={"ProjectSnapshot.md": "# snapshot"},
     )
     assert "Prefer player-visible or user-visible functionality" in prompt
+
+
+def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
+    prompt = build_prompt(
+        role="developer",
+        workspace=tmp_path,
+        prior_artifacts={"FeatureSpec.md": "# spec", "ArchitectureDecision.md": "# adr"},
+        backend_name="codex",
+    )
+    assert prompt.startswith("Implement the feature now")
+    assert "Role: developer" not in prompt

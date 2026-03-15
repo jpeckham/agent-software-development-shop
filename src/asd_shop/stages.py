@@ -108,11 +108,15 @@ def execute_stage(
             summary="completed via supervisor",
         )
 
-    prompt = build_prompt(role=role, workspace=record.workspace, prior_artifacts=prior_artifacts)
-
     last_result = None
     used_backend = None
     for backend_name in definition.backends:
+        prompt = build_prompt(
+            role=role,
+            workspace=record.workspace,
+            prior_artifacts=prior_artifacts,
+            backend_name=backend_name,
+        )
         backend = get_backend(backend_name)
         result = backend.run(prompt=prompt, workspace=record.workspace, stage_name=role)
         audit = diff_summary(record.workspace)
