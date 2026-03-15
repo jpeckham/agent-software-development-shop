@@ -56,10 +56,10 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
         sections.append("Run the relevant verification and produce the required QA artifact immediately.")
 
     if prior_artifacts:
-        sections.append("Task context from prior artifacts:")
-        for name, content in prior_artifacts.items():
-            sections.append(f"## {name}")
-            sections.append(content)
+        sections.append("Read these workspace artifacts before acting:")
+        for name in prior_artifacts:
+            sections.append(f"- {workspace / name}")
+        sections.append("Use those files as the source of truth instead of asking for more context.")
 
     return "\n\n".join(sections)
 

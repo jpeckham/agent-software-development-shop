@@ -27,6 +27,20 @@ GENERIC_STARTUP_MARKERS = (
     "i'll work directly in this local repository",
     "leave that branch checked out",
 )
+NON_IMPLEMENTATION_PATH_PREFIXES = ("runs/",)
+NON_IMPLEMENTATION_FILENAMES = {
+    "ApprovalPacket.md",
+    "ArchitectureDecision.md",
+    "FeatureProposal.md",
+    "FeatureSpec.md",
+    "ProjectSnapshot.md",
+    "TechnicalDesign.md",
+    "QAReport.md",
+    "command-log.json",
+    "events.jsonl",
+    "git-diff.patch",
+    "run.json",
+}
 
 
 def _stage_name(role: str) -> StageName:
@@ -38,19 +52,54 @@ def _is_generic_startup_text(content: str) -> bool:
     return any(marker in lowered for marker in GENERIC_STARTUP_MARKERS)
 
 
-def _has_valid_stage_output(record: RunRecord, role: str, content: str) -> bool:
+def _has_meaningful_implementation_changes(changed_files: list[str]) -> bool:
+    for path in changed_files:
+        normalized = path.replace("\\", "/")
+        if normalized in NON_IMPLEMENTATION_FILENAMES:
+            continue
+        if any(normalized.startswith(prefix) for prefix in NON_IMPLEMENTATION_PATH_PREFIXES):
+            continue
+        return True
+    return False
+
+
+def _has_valid_stage_output(record: RunRecord, role: str, content: str, changed_files: list[str]) -> bool:
     definition = ROLE_BY_NAME[role]
     workspace_artifact = record.workspace / definition.artifact_filename
     if workspace_artifact.exists():
         return True
     if definition.artifact_filename in content and not _is_generic_startup_text(content):
         return True
+    if role == "developer" and _has_meaningful_implementation_changes(changed_files):
+        return True
     return False
 
 
-def _write_stage_artifact(record: RunRecord, role: str, content: str) -> Path:
+def _synthesize_developer_artifact(changed_files: list[str], content: str) -> str:
+    sections = [
+        "# Technical Design",
+        "",
+        "This artifact was synthesized locally because the developer stage made meaningful repository changes.",
+        "",
+        "## Changed Files",
+    ]
+    for path in changed_files:
+        normalized = path.replace("\\", "/")
+        if normalized in NON_IMPLEMENTATION_FILENAMES:
+            continue
+        if any(normalized.startswith(prefix) for prefix in NON_IMPLEMENTATION_PATH_PREFIXES):
+            continue
+        sections.append(f"- {normalized}")
+    if content.strip():
+        sections.extend(["", "## Backend Output", content.strip()])
+    return "\n".join(sections)
+
+
+def _write_stage_artifact(record: RunRecord, role: str, content: str, changed_files: list[str]) -> Path:
     definition = ROLE_BY_NAME[role]
     artifact_text = content if content.strip() else f"# {role}\n"
+    if role == "developer" and _has_meaningful_implementation_changes(changed_files):
+        artifact_text = _synthesize_developer_artifact(changed_files, content)
     artifact_path = write_markdown_artifact(record.run_dir, definition.artifact_filename, artifact_text)
     if role == "developer":
         write_markdown_artifact(record.run_dir, "ImplementationPlan.md", artifact_text)
@@ -96,7 +145,7 @@ def execute_stage(
     )
 
     if role == "human_approval":
-        artifact_path = _write_stage_artifact(record, role, _build_human_approval_packet(prior_artifacts))
+        artifact_path = _write_stage_artifact(record, role, _build_human_approval_packet(prior_artifacts), [])
         append_event(
             record.run_dir,
             TelemetryEvent(
@@ -129,8 +178,8 @@ def execute_stage(
         last_result = result
         used_backend = backend_name
 
-        if result.exit_code == 0 and _has_valid_stage_output(record, role, result.stdout):
-            artifact_path = _write_stage_artifact(record, role, result.stdout)
+        if result.exit_code == 0 and _has_valid_stage_output(record, role, result.stdout, audit.changed_files):
+            artifact_path = _write_stage_artifact(record, role, result.stdout, audit.changed_files)
             append_event(
                 record.run_dir,
                 TelemetryEvent(

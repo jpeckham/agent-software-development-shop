@@ -42,3 +42,16 @@ def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
     assert "Do not create or ask for a worktree" in prompt
     assert str(plan_path) in prompt
     assert "Execute Task 1 immediately" in prompt
+    assert "FeatureSpec.md" in prompt
+    assert "# spec" not in prompt
+
+
+def test_codex_qa_prompt_references_artifact_files_instead_of_embedding_contents(tmp_path) -> None:
+    prompt = build_prompt(
+        role="qa",
+        workspace=tmp_path,
+        prior_artifacts={"TechnicalDesign.md": "# detailed design\n" * 1000},
+        backend_name="codex",
+    )
+    assert "TechnicalDesign.md" in prompt
+    assert "# detailed design" not in prompt

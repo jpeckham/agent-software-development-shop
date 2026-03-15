@@ -132,3 +132,34 @@ def test_execute_stage_generates_human_approval_locally(tmp_path, monkeypatch) -
     result = execute_stage("human_approval", record, prior_artifacts={"FeatureSpec.md": "# spec"})
     assert result.status == "completed"
     assert result.artifact_path.name == "ApprovalPacket.md"
+
+
+def test_execute_stage_accepts_meaningful_developer_code_changes_without_artifact_output(
+    tmp_path, monkeypatch
+) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+
+    class DeveloperBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            from asd_shop.shell_runner import CommandResult
+
+            return CommandResult(
+                args=["codex", "exec"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout="Implementation in progress.",
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr("asd_shop.stages.get_backend", lambda _: DeveloperBackend())
+    monkeypatch.setattr(
+        "asd_shop.stages.diff_summary",
+        lambda _: type("Audit", (), {"changed_files": ["src/app.py"], "diff_text": "diff"})(),
+    )
+    result = execute_stage("developer", record, prior_artifacts={})
+
+    assert result.status == "completed"
+    assert result.artifact_path is not None
+    assert result.artifact_path.name == "TechnicalDesign.md"
+    assert "src/app.py" in result.artifact_path.read_text(encoding="utf-8")
