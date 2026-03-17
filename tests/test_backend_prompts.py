@@ -24,6 +24,7 @@ def test_product_manager_prompt_prefers_user_visible_features(tmp_path) -> None:
         prior_artifacts={"ProjectSnapshot.md": "# snapshot"},
     )
     assert "Prefer player-visible or user-visible functionality" in prompt
+    assert "agentically" in prompt
 
 
 def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
@@ -55,3 +56,16 @@ def test_codex_qa_prompt_references_artifact_files_instead_of_embedding_contents
     )
     assert "TechnicalDesign.md" in prompt
     assert "# detailed design" not in prompt
+    assert "event logs" in prompt.lower()
+
+
+def test_claude_product_manager_prompt_references_artifact_files_instead_of_embedding_contents(tmp_path) -> None:
+    prompt = build_prompt(
+        role="product_manager",
+        workspace=tmp_path,
+        prior_artifacts={"ProjectSnapshot.md": "# large snapshot\n" * 5000},
+        backend_name="claude",
+    )
+    assert "ProjectSnapshot.md" in prompt
+    assert "# large snapshot" not in prompt
+    assert "source of truth" in prompt.lower()

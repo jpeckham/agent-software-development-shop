@@ -2,6 +2,23 @@
 
 This repository contains a local CLI MVP for an autonomous software-development workflow. The tool runs a single multi-agent cycle, writes human-readable artifacts, and records structured telemetry for later review.
 
+## Delivery Model
+
+The shop is designed to build software that can validate its own behavior autonomously. In practice, each feature should produce three deliverables together:
+
+- implementation
+- observability
+- executable validation
+
+The workflow prompts enforce this as a standard:
+
+- product and requirements artifacts should describe observable outcomes, not just code changes
+- architecture artifacts should specify an observability contract, including structured events or equivalent telemetry for meaningful behavior
+- development should add instrumentation and validation hooks when they are missing
+- QA should rely on evidence such as scenario execution, state checks, event logs, and test/build output rather than trusting narrative summaries
+
+This makes the shop suitable for building software that exposes behavior clearly enough for later agentic QA and regression validation.
+
 ## Quickstart
 
 Create a virtual environment, install the project in editable mode with dev dependencies, and run the tests:

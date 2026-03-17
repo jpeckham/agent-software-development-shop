@@ -9,18 +9,29 @@ ROLE_EXECUTION_GUIDANCE = {
     "product_manager": [
         "Prefer player-visible or user-visible functionality over pure internal refactors.",
         "Only choose architecture or cleanup work when it directly unlocks or de-risks a near-term user-facing feature.",
+        "Prefer slices whose user-visible behavior can be validated agentically through scenarios, state checks, and evidence.",
+    ],
+    "business_analyst": [
+        "Define the feature in terms of observable outcomes, not just implementation notes.",
+        "Acceptance criteria should specify the user action, expected state change, expected emitted events or logs, and forbidden outcomes when possible.",
+    ],
+    "architect": [
+        "Define an observability contract for the feature, including structured event logging for meaningful user-visible behavior.",
+        "Specify how autonomous QA can validate behavior through event logs, state transitions, scenario execution, and evidence bundles.",
     ],
     "developer": [
         "The prior artifacts already define the task.",
         "Do the work now.",
         "Do not ask for the task again.",
         "If you need assumptions, make the smallest reasonable assumptions and continue.",
+        "Implement observability and validation hooks alongside the feature so autonomous QA can prove the requested behavior happened.",
     ],
     "qa": [
         "The prior artifacts already define the task.",
         "Perform the QA work now.",
         "Do not ask what needs QA.",
         "Produce findings, validation, or execution results immediately.",
+        "Treat QA as evidence-driven validation: run scenarios, inspect state changes, and read structured event logs or equivalent telemetry when available.",
     ],
 }
 
@@ -47,6 +58,7 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
     ]
     if role == "developer":
         sections.append("Apply code changes in the repository when needed and produce the required artifact.")
+        sections.append("Implement the feature together with any missing structured event logs, telemetry, or validation hooks required to verify the requested behavior.")
         plan_path = _find_latest_workspace_implementation_plan(workspace)
         if plan_path is not None:
             sections.append(f"Execution source of truth: {plan_path}")
@@ -54,6 +66,29 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
             sections.append("Do not re-evaluate whether planning, approval, or worktree setup is needed.")
     elif role == "qa":
         sections.append("Run the relevant verification and produce the required QA artifact immediately.")
+        sections.append("Use event logs, telemetry, state checks, and scenario evidence to validate the requested behavior whenever the product exposes them.")
+
+    if prior_artifacts:
+        sections.append("Read these workspace artifacts before acting:")
+        for name in prior_artifacts:
+            sections.append(f"- {workspace / name}")
+        sections.append("Use those files as the source of truth instead of asking for more context.")
+
+    return "\n\n".join(sections)
+
+
+def _build_cli_prompt(role: str, workspace: Path, prior_artifacts: dict[str, str]) -> str:
+    definition = ROLE_BY_NAME[role]
+    sections = [
+        f"Role: {definition.name}",
+        f"Workspace: {workspace}",
+        f"Required artifact file: {definition.artifact_filename}",
+        f"Instruction: {definition.instruction}",
+        "Write the required artifact file in the workspace or produce complete artifact content on stdout.",
+    ]
+
+    for line in ROLE_EXECUTION_GUIDANCE.get(role, []):
+        sections.append(line)
 
     if prior_artifacts:
         sections.append("Read these workspace artifacts before acting:")
@@ -72,6 +107,8 @@ def build_prompt(
 ) -> str:
     if backend_name == "codex" and role in {"developer", "qa"}:
         return _build_codex_prompt(role, workspace, prior_artifacts)
+    if backend_name in {"claude", "codex"}:
+        return _build_cli_prompt(role, workspace, prior_artifacts)
 
     definition = ROLE_BY_NAME[role]
     sections = [
