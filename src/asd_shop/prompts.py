@@ -5,6 +5,13 @@ from pathlib import Path
 from asd_shop.roles import ROLE_BY_NAME
 
 
+SHARED_QA_GUARDRAILS = [
+    "Preserve cross-stage semantic consistency with prior artifacts.",
+    "Name user-visible labels or user-visible terminology explicitly when they matter.",
+    "Flag contradictions, missing evidence, and suspicious assumptions before proceeding.",
+]
+
+
 ROLE_EXECUTION_GUIDANCE = {
     "product_manager": [
         "Prefer player-visible or user-visible functionality over pure internal refactors.",
@@ -14,10 +21,12 @@ ROLE_EXECUTION_GUIDANCE = {
     "business_analyst": [
         "Define the feature in terms of observable outcomes, not just implementation notes.",
         "Acceptance criteria should specify the user action, expected state change, expected emitted events or logs, and forbidden outcomes when possible.",
+        "Name user-visible labels or user-visible terminology exactly and require semantic consistency across artifacts.",
     ],
     "architect": [
         "Define an observability contract for the feature, including structured event logging for meaningful user-visible behavior.",
         "Specify how autonomous QA can validate behavior through event logs, state transitions, scenario execution, and evidence bundles.",
+        "Preserve user-visible semantics and define invariants or a validation strategy that proves them.",
     ],
     "developer": [
         "The prior artifacts already define the task.",
@@ -25,6 +34,7 @@ ROLE_EXECUTION_GUIDANCE = {
         "Do not ask for the task again.",
         "If you need assumptions, make the smallest reasonable assumptions and continue.",
         "Implement observability and validation hooks alongside the feature so autonomous QA can prove the requested behavior happened.",
+        "Add tests or validation hooks for label integrity and ranking or semantic consistency when relevant.",
     ],
     "qa": [
         "The prior artifacts already define the task.",
@@ -32,6 +42,7 @@ ROLE_EXECUTION_GUIDANCE = {
         "Do not ask what needs QA.",
         "Produce findings, validation, or execution results immediately.",
         "Treat QA as evidence-driven validation: run scenarios, inspect state changes, and read structured event logs or equivalent telemetry when available.",
+        "Challenge suspicious logic and prior assumptions or earlier assumptions when they look incomplete, contradictory, or suspicious.",
     ],
 }
 
@@ -56,6 +67,8 @@ def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, s
         "Do not stop at planning or role confirmation.",
         "Make the smallest reasonable assumptions and proceed.",
     ]
+    sections.extend(SHARED_QA_GUARDRAILS)
+    sections.extend(ROLE_EXECUTION_GUIDANCE.get(role, []))
     if role == "developer":
         sections.append("Apply code changes in the repository when needed and produce the required artifact.")
         sections.append("Implement the feature together with any missing structured event logs, telemetry, or validation hooks required to verify the requested behavior.")
@@ -86,6 +99,7 @@ def _build_cli_prompt(role: str, workspace: Path, prior_artifacts: dict[str, str
         f"Instruction: {definition.instruction}",
         "Write the required artifact file in the workspace or produce complete artifact content on stdout.",
     ]
+    sections.extend(SHARED_QA_GUARDRAILS)
 
     for line in ROLE_EXECUTION_GUIDANCE.get(role, []):
         sections.append(line)
@@ -118,6 +132,7 @@ def build_prompt(
         f"Instruction: {definition.instruction}",
         "Write the required artifact file in the workspace or produce complete artifact content on stdout.",
     ]
+    sections.extend(SHARED_QA_GUARDRAILS)
 
     for line in ROLE_EXECUTION_GUIDANCE.get(role, []):
         sections.append(line)

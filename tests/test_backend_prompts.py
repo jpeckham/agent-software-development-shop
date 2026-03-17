@@ -69,3 +69,51 @@ def test_claude_product_manager_prompt_references_artifact_files_instead_of_embe
     assert "ProjectSnapshot.md" in prompt
     assert "# large snapshot" not in prompt
     assert "source of truth" in prompt.lower()
+
+
+def test_claude_business_analyst_prompt_requires_explicit_labels_and_semantic_consistency(tmp_path) -> None:
+    prompt = build_prompt(
+        role="business_analyst",
+        workspace=tmp_path,
+        prior_artifacts={"FeatureProposal.md": "# proposal"},
+        backend_name="claude",
+    )
+    assert "user-visible labels" in prompt.lower() or "user-visible terminology" in prompt.lower()
+    assert "semantic consistency" in prompt.lower()
+
+
+def test_claude_architect_prompt_requires_semantic_invariants_or_validation_strategy(tmp_path) -> None:
+    prompt = build_prompt(
+        role="architect",
+        workspace=tmp_path,
+        prior_artifacts={"FeatureSpec.md": "# spec"},
+        backend_name="claude",
+    )
+    assert "user-visible semantics" in prompt.lower()
+    assert "invariants" in prompt.lower() or "validation strategy" in prompt.lower()
+
+
+def test_codex_qa_prompt_challenges_suspicious_logic_and_prior_assumptions(tmp_path) -> None:
+    prompt = build_prompt(
+        role="qa",
+        workspace=tmp_path,
+        prior_artifacts={"TechnicalDesign.md": "# design"},
+        backend_name="codex",
+    )
+    assert "suspicious logic" in prompt.lower()
+    assert "earlier assumptions" in prompt.lower() or "prior assumptions" in prompt.lower()
+
+
+def test_codex_developer_prompt_requires_label_integrity_and_semantic_validation_hooks(tmp_path) -> None:
+    plans_dir = tmp_path / "docs" / "plans"
+    plans_dir.mkdir(parents=True)
+    (plans_dir / "2026-03-16-cross-stage-qa-implementation.md").write_text("# plan", encoding="utf-8")
+    prompt = build_prompt(
+        role="developer",
+        workspace=tmp_path,
+        prior_artifacts={"FeatureSpec.md": "# spec", "ArchitectureDecision.md": "# adr"},
+        backend_name="codex",
+    )
+    assert "tests" in prompt.lower() or "validation hooks" in prompt.lower()
+    assert "label integrity" in prompt.lower()
+    assert "ranking" in prompt.lower() or "semantic consistency" in prompt.lower()
