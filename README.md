@@ -38,10 +38,22 @@ Run one autonomous cycle in the current directory:
 python -m asd_shop.cli run
 ```
 
+Run one autonomous cycle against another folder (e.g., a different project or sample workspace):
+
+```powershell
+python -m asd_shop.cli run ..\extractor-shooter-light\
+```
+
 Approve the latest run after review:
 
 ```powershell
 python -m asd_shop.cli approve <run-id> --decision approve
+```
+
+Approve a run in a different workspace:
+
+```powershell
+python -m asd_shop.cli approve <run-id> --decision approve --workspace ..\extractor-shooter-light\
 ```
 
 Reject a run:

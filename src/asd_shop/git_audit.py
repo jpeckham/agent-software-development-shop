@@ -20,6 +20,8 @@ def diff_summary(workspace: Path) -> DiffSummary:
         cwd=str(workspace),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     patch = subprocess.run(
@@ -27,7 +29,11 @@ def diff_summary(workspace: Path) -> DiffSummary:
         cwd=str(workspace),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
-    changed_files = [line for line in name_only.stdout.splitlines() if line]
-    return DiffSummary(changed_files=changed_files, diff_text=patch.stdout)
+    name_only_stdout = name_only.stdout or ""
+    patch_stdout = patch.stdout or ""
+    changed_files = [line for line in name_only_stdout.splitlines() if line]
+    return DiffSummary(changed_files=changed_files, diff_text=patch_stdout)
