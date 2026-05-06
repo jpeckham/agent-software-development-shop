@@ -7,4 +7,4 @@ def test_codex_backend_builds_exec_command(tmp_path) -> None:
     assert command[0] == "codex"
     assert "exec" in command
     assert "--json" in command
-    assert "--ephemeral" in command
+    assert "--ephemeral" not in command

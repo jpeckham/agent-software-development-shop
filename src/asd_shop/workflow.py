@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from datetime import timedelta
+from time import perf_counter
+
 from asd_shop.artifacts import append_event
+from asd_shop.console_events import AgentEventPublisher, publish_agent_event
 from asd_shop.models import RunConfig, RunStatus, StageName, TelemetryEvent
 from asd_shop.roles import ROLE_DEFINITIONS
 from asd_shop.stages import execute_stage
@@ -19,11 +23,33 @@ def _load_prior_artifacts(record):
     return prior_artifacts
 
 
-def run_cycle(config: RunConfig, *, new_run: bool = False):
+def run_cycle(
+    config: RunConfig,
+    *,
+    new_run: bool = False,
+    event_publisher: AgentEventPublisher | None = None,
+    backend_override: str | None = None,
+):
+    started_at = perf_counter()
     runs_dir = config.runs_dir or (config.workspace / "runs")
     record = None if new_run else find_most_recent_resumable_run(runs_dir)
     if record is None:
         record = initialize_run(config)
+        publish_agent_event(
+            event_publisher,
+            agent_name="orchestrator",
+            level="INFO",
+            message="startup: initialized workflow run",
+            workflow_id=record.run_id,
+        )
+    else:
+        publish_agent_event(
+            event_publisher,
+            agent_name="orchestrator",
+            level="INFO",
+            message="startup: resuming workflow run",
+            workflow_id=record.run_id,
+        )
 
     record.status = RunStatus.RUNNING
     save_run_record(record)
@@ -42,10 +68,19 @@ def run_cycle(config: RunConfig, *, new_run: bool = False):
                 role=definition.name,
                 record=record,
                 prior_artifacts=prior_artifacts,
+                event_publisher=event_publisher,
+                backend_override=backend_override,
             )
         except Exception as error:
             record.status = RunStatus.FAILED
             record.failed_stage = StageName(definition.name)
+            publish_agent_event(
+                event_publisher,
+                agent_name="orchestrator",
+                level="ERROR",
+                message=f"failure: {definition.name} failed: {error}",
+                workflow_id=record.run_id,
+            )
             append_event(
                 record.run_dir,
                 TelemetryEvent(
@@ -62,4 +97,12 @@ def run_cycle(config: RunConfig, *, new_run: bool = False):
     record.status = RunStatus.READY_FOR_APPROVAL
     record.failed_stage = None
     save_run_record(record)
+    publish_agent_event(
+        event_publisher,
+        agent_name="orchestrator",
+        level="INFO",
+        message="shutdown: workflow ready for approval",
+        workflow_id=record.run_id,
+        duration=timedelta(seconds=perf_counter() - started_at),
+    )
     return record

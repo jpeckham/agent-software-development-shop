@@ -41,6 +41,10 @@ def determine_auto_response(message_text: str, original_prompt: str) -> str | No
         or "send the actual task" in lowered
         or "which scope should i execute now" in lowered
         or "which scope should i execute" in lowered
+        or "what would you like me to inspect" in lowered
+        or "what would you like me to analyze" in lowered
+        or "send the repository question" in lowered
+        or "analysis target you want me to investigate" in lowered
         or "what task" in lowered
     ):
         return (

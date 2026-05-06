@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from asd_shop.console_events import AgentEventPublisher
 from asd_shop.agent_backends.interactive_session import InteractiveParseResult
 from asd_shop.agent_backends.interactive_session import parse_claude_stream_output
 from asd_shop.agent_backends.interactive_session import run_interactive_session
@@ -48,7 +49,14 @@ class ClaudeCliBackend:
             prompt,
         ]
 
-    def run(self, prompt: str, workspace: Path, stage_name: str) -> CommandResult:
+    def run(
+        self,
+        prompt: str,
+        workspace: Path,
+        stage_name: str,
+        event_publisher: AgentEventPublisher | None = None,
+    ) -> CommandResult:
+        del event_publisher
         del stage_name
         session_id = str(uuid.uuid4())
         return run_interactive_session(

@@ -47,6 +47,19 @@ def test_codex_developer_prompt_is_imperative_not_role_framed(tmp_path) -> None:
     assert "# spec" not in prompt
 
 
+def test_codex_repository_analyst_prompt_is_imperative_not_role_framed(tmp_path) -> None:
+    prompt = build_prompt(
+        role="repository_analyst",
+        workspace=tmp_path,
+        prior_artifacts={},
+        backend_name="codex",
+    )
+    assert prompt.startswith("Perform the repository_analyst stage now")
+    assert "Role: repository_analyst" not in prompt
+    assert "ProjectSnapshot.md" in prompt
+    assert "Do not ask what to analyze" in prompt
+
+
 def test_codex_qa_prompt_references_artifact_files_instead_of_embedding_contents(tmp_path) -> None:
     prompt = build_prompt(
         role="qa",

@@ -8,3 +8,4 @@ from pydantic import BaseModel, Field
 
 class Settings(BaseModel):
     runs_dir: Path = Field(default_factory=lambda: Path(os.getenv("ASD_SHOP_RUNS_DIR", "runs")))
+    backend: str | None = Field(default_factory=lambda: os.getenv("ASD_SHOP_BACKEND"))

@@ -25,6 +25,90 @@ def test_execute_stage_uses_backend_and_writes_command_log(tmp_path, monkeypatch
     assert (record.run_dir / "command-log.json").exists()
 
 
+def test_execute_stage_copies_workspace_artifact_when_backend_stdout_is_missing(tmp_path, monkeypatch) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+    workspace_artifact = tmp_path / "ProjectSnapshot.md"
+    workspace_artifact.write_text("# Snapshot", encoding="utf-8")
+
+    class ArtifactOnlyBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            from asd_shop.shell_runner import CommandResult
+
+            return CommandResult(
+                args=["claude", "-p"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout=None,
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr("asd_shop.stages.get_backend", lambda _: ArtifactOnlyBackend())
+
+    result = execute_stage("repository_analyst", record, prior_artifacts={})
+
+    assert result.status == "completed"
+    assert result.artifact_path is not None
+    assert result.artifact_path.read_text(encoding="utf-8") == "# Snapshot"
+
+
+def test_execute_stage_accepts_business_analysis_alias_for_business_analyst(tmp_path, monkeypatch) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+
+    class BusinessAnalystBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            from asd_shop.shell_runner import CommandResult
+
+            (workspace / "BusinessAnalysis.md").write_text("# Business Analysis\n\nStage: business_analyst", encoding="utf-8")
+            return CommandResult(
+                args=["codex", "exec"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout="Created BusinessAnalysis.md",
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr("asd_shop.stages.get_backend", lambda _: BusinessAnalystBackend())
+
+    result = execute_stage("business_analyst", record, prior_artifacts={}, backend_override="codex")
+
+    assert result.status == "completed"
+    assert result.artifact_path is not None
+    assert result.artifact_path.name == "FeatureSpec.md"
+    assert result.artifact_path.read_text(encoding="utf-8") == "# Business Analysis\n\nStage: business_analyst"
+
+
+def test_execute_stage_accepts_feature_architecture_alias_for_architect(tmp_path, monkeypatch) -> None:
+    record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
+
+    class ArchitectBackend:
+        def run(self, prompt: str, workspace, stage_name: str):
+            from asd_shop.shell_runner import CommandResult
+
+            (workspace / "FeatureArchitecture.md").write_text(
+                "# Feature Architecture\n\nStage: technical_architect",
+                encoding="utf-8",
+            )
+            return CommandResult(
+                args=["codex", "exec"],
+                cwd=str(workspace),
+                exit_code=0,
+                stdout="Created FeatureArchitecture.md",
+                stderr="",
+                duration_seconds=0.1,
+            )
+
+    monkeypatch.setattr("asd_shop.stages.get_backend", lambda _: ArchitectBackend())
+
+    result = execute_stage("architect", record, prior_artifacts={}, backend_override="codex")
+
+    assert result.status == "completed"
+    assert result.artifact_path is not None
+    assert result.artifact_path.name == "ArchitectureDecision.md"
+    assert result.artifact_path.read_text(encoding="utf-8") == "# Feature Architecture\n\nStage: technical_architect"
+
+
 def test_execute_stage_falls_back_from_codex_to_claude(tmp_path, monkeypatch) -> None:
     record = initialize_run(RunConfig(workspace=tmp_path, runs_dir=tmp_path / "runs"))
     calls = []

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from asd_shop.console_events import AgentEventPublisher
 from asd_shop.shell_runner import CommandResult
 
 
@@ -15,5 +16,11 @@ class AgentBackend(Protocol):
     def build_continue_command(self, session_id: str, prompt: str, workspace: Path) -> list[str]:
         ...
 
-    def run(self, prompt: str, workspace: Path, stage_name: str) -> CommandResult:
+    def run(
+        self,
+        prompt: str,
+        workspace: Path,
+        stage_name: str,
+        event_publisher: AgentEventPublisher | None = None,
+    ) -> CommandResult:
         ...

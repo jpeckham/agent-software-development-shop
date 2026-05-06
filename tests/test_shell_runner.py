@@ -95,3 +95,36 @@ def test_subprocess_shell_runner_can_run_with_explicit_environment_only(monkeypa
     env = captured["env"]
     assert isinstance(env, dict)
     assert env == {"PATH": "C:\\Windows\\System32"}
+
+
+def test_subprocess_shell_runner_streams_stdout_lines(monkeypatch, tmp_path) -> None:
+    captured_lines: list[tuple[str, str]] = []
+
+    class FakeStdout:
+        def __iter__(self):
+            return iter(["one\n", "two\n"])
+
+    class FakeStderr:
+        def read(self):
+            return "warn\n"
+
+    class FakeProcess:
+        stdout = FakeStdout()
+        stderr = FakeStderr()
+        returncode = 0
+
+        def wait(self):
+            return 0
+
+    def fake_popen(args, cwd, stdout, stderr, text, encoding, errors, env, bufsize):
+        return FakeProcess()
+
+    monkeypatch.setattr(shell_runner_module, "resolve_command", lambda command: command)
+    monkeypatch.setattr(shell_runner_module.subprocess, "Popen", fake_popen)
+
+    runner = SubprocessShellRunner()
+    result = runner.run(["codex", "exec"], tmp_path, output_callback=captured_lines.append)
+
+    assert captured_lines == [("stdout", "one"), ("stdout", "two"), ("stderr", "warn")]
+    assert result.stdout == "one\ntwo\n"
+    assert result.stderr == "warn\n"

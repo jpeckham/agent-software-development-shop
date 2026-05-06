@@ -57,11 +57,19 @@ def _find_latest_workspace_implementation_plan(workspace: Path) -> Path | None:
 
 def _build_codex_prompt(role: str, workspace: Path, prior_artifacts: dict[str, str]) -> str:
     definition = ROLE_BY_NAME[role]
+    opening = (
+        "Implement the feature now using the prior artifacts as the task definition."
+        if role == "developer"
+        else f"Perform the {role} stage now."
+    )
     sections = [
-        "Implement the feature now using the prior artifacts as the task definition.",
+        opening,
         f"Work in this repository: {workspace}",
         f"Required output artifact: {definition.artifact_filename}",
+        f"Stage instruction: {definition.instruction}",
+        "Write the required artifact file in the workspace or produce complete artifact content on stdout.",
         "Do not ask what the task is.",
+        "Do not ask what to analyze.",
         "Do not create or ask for a worktree.",
         "Operate in the current workspace only.",
         "Do not stop at planning or role confirmation.",
@@ -119,9 +127,9 @@ def build_prompt(
     prior_artifacts: dict[str, str],
     backend_name: str | None = None,
 ) -> str:
-    if backend_name == "codex" and role in {"developer", "qa"}:
+    if backend_name == "codex":
         return _build_codex_prompt(role, workspace, prior_artifacts)
-    if backend_name in {"claude", "codex"}:
+    if backend_name == "claude":
         return _build_cli_prompt(role, workspace, prior_artifacts)
 
     definition = ROLE_BY_NAME[role]

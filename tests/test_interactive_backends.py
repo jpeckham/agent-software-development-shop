@@ -3,6 +3,7 @@ import uuid
 
 from asd_shop.agent_backends.claude_cli import ClaudeCliBackend
 from asd_shop.agent_backends.codex_cli import CodexCliBackend
+from asd_shop.console_events import AgentEventPublisher
 from asd_shop.shell_runner import CommandResult
 
 
@@ -11,7 +12,7 @@ class SequenceShellRunner:
         self.results = list(results)
         self.calls = []
 
-    def run(self, args, cwd, unset_env=None, inherit_env=True, extra_env=None):
+    def run(self, args, cwd, unset_env=None, inherit_env=True, extra_env=None, output_callback=None):
         self.calls.append(
             {
                 "args": args,
@@ -19,9 +20,16 @@ class SequenceShellRunner:
                 "unset_env": unset_env,
                 "inherit_env": inherit_env,
                 "extra_env": extra_env,
+                "output_callback": output_callback,
             }
         )
-        return self.results.pop(0)
+        result = self.results.pop(0)
+        if output_callback is not None:
+            for line in result.stdout.splitlines():
+                output_callback(("stdout", line))
+            for line in result.stderr.splitlines():
+                output_callback(("stderr", line))
+        return result
 
 
 def test_codex_backend_resumes_session_after_worktree_question(tmp_path) -> None:
@@ -57,7 +65,7 @@ def test_codex_backend_resumes_session_after_worktree_question(tmp_path) -> None
     assert result.exit_code == 0
     assert "`TechnicalDesign.md` has been written." in result.stdout
     assert len(runner.calls) == 2
-    assert "--ephemeral" in runner.calls[0]["args"]
+    assert "--ephemeral" not in runner.calls[0]["args"]
     assert runner.calls[1]["args"][:3] == ["codex", "exec", "resume"]
     assert "Do not use a worktree." in runner.calls[1]["args"][-1]
 
@@ -89,6 +97,91 @@ def test_codex_backend_replays_original_prompt_after_policy_ack(tmp_path) -> Non
 
     assert result.exit_code == 0
     assert runner.calls[1]["args"][-1] == "implement feature now"
+
+
+def test_codex_backend_replays_original_prompt_after_generic_inspection_question(tmp_path) -> None:
+    runner = SequenceShellRunner(
+        [
+            CommandResult(
+                args=["codex", "exec", "--json"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"thread.started","thread_id":"session-789"}\n{"type":"item.completed","item":{"type":"agent_message","text":"I’m ready as `repository_analyst`. What would you like me to inspect in the repo?"}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+            CommandResult(
+                args=["codex", "exec", "resume", "session-789"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"item.completed","item":{"type":"agent_message","text":"`ProjectSnapshot.md` has been written."}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+        ]
+    )
+
+    backend = CodexCliBackend(shell_runner=runner)
+    result = backend.run("inspect this repo now", tmp_path, "repository_analyst")
+
+    assert result.exit_code == 0
+    assert runner.calls[1]["args"][-1] == "The task is the one already provided by the supervisor. Execute it now.\n\ninspect this repo now"
+
+
+def test_codex_backend_replays_original_prompt_after_analysis_target_question(tmp_path) -> None:
+    runner = SequenceShellRunner(
+        [
+            CommandResult(
+                args=["codex", "exec", "--json"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"thread.started","thread_id":"session-987"}\n{"type":"item.completed","item":{"type":"agent_message","text":"Ready as `repository_analyst`. Send the repository question or analysis target you want me to investigate."}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+            CommandResult(
+                args=["codex", "exec", "resume", "session-987"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"item.completed","item":{"type":"agent_message","text":"`ProjectSnapshot.md` has been written."}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+        ]
+    )
+
+    backend = CodexCliBackend(shell_runner=runner)
+    backend.run("inspect this repo now", tmp_path, "repository_analyst")
+
+    assert runner.calls[1]["args"][-1] == "The task is the one already provided by the supervisor. Execute it now.\n\ninspect this repo now"
+
+
+def test_codex_backend_replays_original_prompt_after_repository_analysis_question(tmp_path) -> None:
+    runner = SequenceShellRunner(
+        [
+            CommandResult(
+                args=["codex", "exec", "--json"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"thread.started","thread_id":"session-654"}\n{"type":"item.completed","item":{"type":"agent_message","text":"Ready. What would you like me to analyze in the repository?"}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+            CommandResult(
+                args=["codex", "exec", "resume", "session-654"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout='{"type":"item.completed","item":{"type":"agent_message","text":"`ProjectSnapshot.md` has been written."}}\n',
+                stderr="",
+                duration_seconds=0.1,
+            ),
+        ]
+    )
+
+    backend = CodexCliBackend(shell_runner=runner)
+    backend.run("inspect this repo now", tmp_path, "repository_analyst")
+
+    assert len(runner.calls) == 2
 
 
 def test_claude_backend_reuses_session_id_for_follow_up(tmp_path, monkeypatch) -> None:
@@ -123,3 +216,31 @@ def test_claude_backend_reuses_session_id_for_follow_up(tmp_path, monkeypatch) -
     assert str(fixed_session_id) in runner.calls[0]["args"]
     assert "--resume" in runner.calls[1]["args"]
     assert str(fixed_session_id) in runner.calls[1]["args"]
+
+
+def test_codex_backend_publishes_live_command_and_message_events(tmp_path) -> None:
+    runner = SequenceShellRunner(
+        [
+            CommandResult(
+                args=["codex", "exec", "--json"],
+                cwd=str(tmp_path),
+                exit_code=0,
+                stdout=(
+                    '{"type":"thread.started","thread_id":"session-live"}\n'
+                    '{"type":"item.started","item":{"type":"command_execution","command":"rg --files"}}\n'
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"`ProjectSnapshot.md` has been written."}}\n'
+                ),
+                stderr="",
+                duration_seconds=0.1,
+            ),
+        ]
+    )
+    publisher = AgentEventPublisher()
+    messages: list[str] = []
+    publisher.subscribe(lambda event: messages.append(event.message))
+
+    backend = CodexCliBackend(shell_runner=runner)
+    backend.run("inspect repo", tmp_path, "repository_analyst", event_publisher=publisher)
+
+    assert "running command: rg --files" in messages
+    assert "`ProjectSnapshot.md` has been written." in messages
